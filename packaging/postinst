@@ -1,0 +1,40 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = configure ]; then
+    # Dienstbenutzer; Gruppe "bluetooth" erlaubt den D-Bus-Zugriff auf BlueZ
+    if ! getent passwd bleproxy >/dev/null; then
+        adduser --system --group --no-create-home --home /nonexistent --shell /usr/sbin/nologin bleproxy
+    fi
+    adduser --quiet bleproxy bluetooth || true
+
+    install -d -m 755 /etc/pi-ble-proxy
+    if [ ! -e /etc/pi-ble-proxy/config.toml ]; then
+        KEY=$(python3 -m pi_ble_proxy genkey)
+        sed "s|HIER_MIT_genkey_ERZEUGTEN_SCHLUESSEL_EINTRAGEN|$KEY|" \
+            /usr/share/pi-ble-proxy/config.example.toml > /etc/pi-ble-proxy/config.toml
+        chown root:bleproxy /etc/pi-ble-proxy/config.toml
+        chmod 640 /etc/pi-ble-proxy/config.toml
+        echo "pi-ble-proxy: Konfiguration mit neuem Schlüssel angelegt: /etc/pi-ble-proxy/config.toml"
+    fi
+
+    # mDNS-Eintrag, damit Home Assistant das Gerät findet (neu erzeugen mit: pi-ble-proxy avahi)
+    if [ -d /etc/avahi/services ]; then
+        pi-ble-proxy avahi -c /etc/pi-ble-proxy/config.toml > /etc/avahi/services/pi-ble-proxy.service || true
+    fi
+
+    if [ -f /etc/systemd/system/pi-ble-proxy.service ]; then
+        echo "pi-ble-proxy: WARNUNG: /etc/systemd/system/pi-ble-proxy.service (manuelle Installation) hat Vorrang vor"
+        echo "              dem Paket. Entfernen, damit die Paket-Unit gilt: sudo rm /etc/systemd/system/pi-ble-proxy.service"
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable pi-ble-proxy.service || true
+        systemctl restart pi-ble-proxy.service || true
+    fi
+    if command -v py3compile >/dev/null 2>&1; then
+        py3compile -p pi-ble-proxy || true
+    fi
+fi
+exit 0

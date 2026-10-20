@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
+    systemctl stop pi-ble-proxy.service || true
+    systemctl disable pi-ble-proxy.service || true
+fi
+if command -v py3clean >/dev/null 2>&1; then
+    py3clean -p pi-ble-proxy || true
+fi
+exit 0

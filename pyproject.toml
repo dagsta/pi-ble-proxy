@@ -1,0 +1,9 @@
+[project]
+name = "pi-ble-proxy"
+version = "0.2.0"
+description = "Raspberry Pi als Bluetooth-Proxy für Home Assistant (ESPHome Native API)"
+requires-python = ">=3.11"
+dependencies = ["cryptography"]  # Debian: python3-cryptography
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

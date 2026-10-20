@@ -1,0 +1,27 @@
+# /etc/pi-ble-proxy/config.toml
+
+[device]
+name = "pi-ble-proxy"            # a-z, 0-9, '-' (wie ESPHome-Gerätenamen)
+friendly_name = "Pi BLE Proxy"
+# mac = "B8:27:EB:00:00:01"      # optional; Standard: MAC einer Netzwerkschnittstelle
+
+[api]
+host = "0.0.0.0"
+port = 6053
+encryption_key = "HIER_MIT_genkey_ERZEUGTEN_SCHLUESSEL_EINTRAGEN"
+max_connections = 4
+
+[bluetooth]
+adapter = "hci0"
+max_connections = 3              # gleichzeitige aktive GATT-Verbindungen
+pause_scan_on_connect = true     # Scan während des Verbindens stoppen (wie ESPHome)
+scan_mode = "active"             # "active" (mit Scan-Responses) oder "passive" (experimentell); HA kann umschalten
+
+[watchdog]
+interval = 30                    # Sekunden zwischen Gesundheitsprüfungen (0 = aus)
+max_failures = 6                 # so viele Prüfungen in Folge, dann beendet sich der Dienst (systemd startet neu)
+silence_timeout = 300            # Sekunden ohne jedes Advertisement gelten als Störung (0 = aus)
+
+[logging]
+level = "INFO"
+stats_interval = 3600            # Statistik-Zeile im Log, Sekunden (0 = aus)

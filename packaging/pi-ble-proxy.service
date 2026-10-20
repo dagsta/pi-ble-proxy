@@ -1,0 +1,28 @@
+[Unit]
+Description=Bluetooth-Proxy für Home Assistant (ESPHome Native API)
+After=bluetooth.service network-online.target
+Wants=bluetooth.service network-online.target
+
+[Service]
+Type=simple
+User=bleproxy
+Group=bluetooth
+ExecStart=/usr/bin/pi-ble-proxy run --config /etc/pi-ble-proxy/config.toml
+# Die Überwachung beendet den Prozess mit Exit-Code 1, wenn Bluetooth dauerhaft gestört ist.
+Restart=on-failure
+RestartSec=5
+
+# Rechte: nur das, was der mgmt-Socket braucht
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_BLUETOOTH
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target
