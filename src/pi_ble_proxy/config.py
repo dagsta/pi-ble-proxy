@@ -35,6 +35,7 @@ class Config:
     watchdog_failures: int = 6
     silence_timeout: float = 300
     stats_interval: float = 3600
+    connect_backoff_step: float = 5
 
 
 def default_mac() -> str:
@@ -98,6 +99,7 @@ def load(path: str | Path) -> Config:
         max_gatt_connections=int(bt.get("max_connections", 3)),
         pause_scan_on_connect=bool(bt.get("pause_scan_on_connect", True)),
         scan_mode=scan_mode,
+        connect_backoff_step=float(bt.get("connect_backoff_step", 5)),
         watchdog_interval=float(wd.get("interval", 30)),
         watchdog_failures=int(wd.get("max_failures", 6)),
         silence_timeout=float(wd.get("silence_timeout", 300)),

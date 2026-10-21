@@ -10,7 +10,11 @@ Raspberry Pi als Bluetooth-Proxy für Home Assistant. Die Software gibt sich als
   Scan-Pause und automatische Wiederholung beim Verbindungsaufbau.
 - **Pairing** ("Just Works", wie ein ESP32-Proxy) über einen BlueZ-Agenten, der nur das Gerät annimmt, das gerade
   von uns gekoppelt wird. PIN-/Passkey-Eingabe ist nicht möglich.
-- **Scan-Modus** aktiv/passiv, in HA umschaltbar (passiv ist experimentell).
+- **Scan-Modus** aktiv/passiv, in HA umschaltbar. Passiv braucht BlueZ ab 5.56 mit Advertisement-Monitor (teils
+  `bluetoothd --experimental`); fehlt das, fällt der Proxy automatisch auf aktiv zurück und versucht es nicht erneut.
+- **Pause nach Verbindungsfehlern:** ab dem zweiten Fehler in Folge pro Gerät 5 s, 10 s, … (höchstens 60 s), damit ein
+  nicht antwortendes Gerät nicht ununterbrochen angefragt wird (`connect_backoff_step`, 0 = aus).
+- **Hinweise im Log** bei blockiertem Bluetooth (rfkill) und bei Unterspannung am Pi.
 - **Überwachung:** erkennt Neustart von `bluetoothd`, ausgeschalteten oder entfernten Adapter und ausbleibende
   Advertisements; repariert, was möglich ist, und beendet sich sonst mit Exit-Code 1, damit systemd neu startet.
 - **Diagnose:** Statistik-Zeile im Log und drei Sensoren in HA (CPU-Temperatur, Advertisements, aktive Verbindungen).
@@ -18,8 +22,9 @@ Raspberry Pi als Bluetooth-Proxy für Home Assistant. Die Software gibt sich als
 ## Stand der Prüfung
 
 Auf einem Pi 4 mit einem SwitchBot Lock in Home Assistant geprüft: passiver Scan, Verbinden, Schreiben, Notifications.
-Nur gegen ein simuliertes BlueZ getestet (nicht auf echter Hardware): Pairing, passiver Scan-Modus, Wiederherstellung
-nach `bluetoothd`-Neustart, die Diagnose-Sensoren in HA und das Debian-Paket.
+Nur gegen ein simuliertes BlueZ getestet (nicht auf echter Hardware): Pairing, passiver Scan-Modus samt Rückfall,
+Pause nach Verbindungsfehlern, Wiederherstellung nach `bluetoothd`-Neustart, die Diagnose-Sensoren in HA, die
+rfkill-/Unterspannungs-Hinweise (Erkennung über sysfs) und das Debian-Paket.
 
 ## Installation (Debian-Paket)
 

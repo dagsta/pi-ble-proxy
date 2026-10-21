@@ -40,6 +40,8 @@ FLUSH_INTERVAL = 0.1  # Advertisements werden gebündelt alle 100 ms verschickt
 MAX_PER_PACKET = 64
 MAX_PENDING = 4096
 MAX_WRITE_BUFFER = 256 * 1024  # langsame Clients: Advertisements verwerfen statt puffern
+MAX_BACKOFF = 60  # Sekunden
+BACKOFF_AFTER = 2  # Fehlversuche in Folge, ab denen die Pause greift
 HANDSHAKE_TIMEOUT = 10
 IDLE_TIMEOUT = 120  # HA schickt alle ~20 s einen Ping
 
@@ -58,6 +60,7 @@ class ApiServer:
         self.stats = Stats()
         self.failed: asyncio.Future | None = None  # wird gesetzt, wenn sich der Dienst beenden soll
         self.scanner_problem: str | None = None
+        self._connect_failures: dict[int, tuple[int, float]] = {}  # Adresse -> (Fehler in Folge, Zeitpunkt)
         self._supervisor: Supervisor | None = None
 
     @property
@@ -123,6 +126,24 @@ class ApiServer:
     def broadcast_scanner_state(self) -> None:
         for session in self._sessions:
             session.send_scanner_state()
+
+    # Pause nach wiederholten Verbindungsfehlern ------------------------------------
+    def backoff_remaining(self, address: int) -> float:
+        step = self.config.connect_backoff_step
+        entry = self._connect_failures.get(address)
+        if not step or not entry or entry[0] < BACKOFF_AFTER:
+            return 0.0
+        wait = min(step * (entry[0] - BACKOFF_AFTER + 1), MAX_BACKOFF)
+        return max(entry[1] + wait - time.monotonic(), 0.0)
+
+    def note_connect_failure(self, address: int) -> None:
+        now = time.monotonic()
+        self._connect_failures = {a: e for a, e in self._connect_failures.items() if now - e[1] < 600}
+        count = self._connect_failures.get(address, (0, 0.0))[0]
+        self._connect_failures[address] = (count + 1, now)
+
+    def note_connect_success(self, address: int) -> None:
+        self._connect_failures.pop(address, None)
 
     # GATT-Slots ----------------------------------------------------------------
     @property
@@ -429,7 +450,13 @@ class Session:
             return
         if t in (m.REQ_CONNECT, m.REQ_CONNECT_WITH_CACHE, m.REQ_CONNECT_WITHOUT_CACHE):
             link = self.server.links.get(req.address)
-            if link is None and self.server.free_slots > 0:
+            wait = self.server.backoff_remaining(req.address)
+            if link is None and wait > 0:
+                log.info("%s: Verbindung zu %s nach wiederholten Fehlern noch %.0f s pausiert", self.peer,
+                         format_mac(req.address), wait)
+                self.send(m.BluetoothDeviceConnectionResponse(
+                    address=req.address, connected=False, error=g.ERR_GENERIC))
+            elif link is None and self.server.free_slots > 0:
                 link = self.server.links[req.address] = Link(self)  # Slot sofort belegen
                 self.server.broadcast_free()
                 link.task = asyncio.get_running_loop().create_task(self._connect(req, link))
@@ -470,6 +497,7 @@ class Session:
             log.info("%s: Verbindung zu %s fehlgeschlagen nach %.1f s: %s", self.peer, mac,
                      time.monotonic() - started, exc)
             srv.stats.connect_failures += 1
+            srv.note_connect_failure(req.address)
             srv.links.pop(req.address, None)
             srv.broadcast_free()
             self.send(m.BluetoothDeviceConnectionResponse(address=req.address, connected=False, error=exc.code))
@@ -478,6 +506,7 @@ class Session:
             await conn.disconnect()
             return
         link.conn = conn
+        srv.note_connect_success(req.address)
         log.info("%s: verbunden mit %s (MTU %d) nach %.1f s", self.peer, mac, conn.mtu, time.monotonic() - started)
         self._send_connected(req.address, conn)
         srv.broadcast_free()

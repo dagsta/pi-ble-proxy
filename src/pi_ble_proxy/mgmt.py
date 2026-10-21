@@ -16,6 +16,7 @@ import socket
 import struct
 from collections.abc import Callable
 
+from . import diagnose
 from .scanner import Advertisement, format_mac
 
 log = logging.getLogger(__name__)
@@ -136,7 +137,8 @@ class MgmtScanner:
         bdaddr, _version, _manufacturer, _supported, current = struct.unpack_from("<6sBHII", info)
         self.adapter_address = format_mac(int.from_bytes(bdaddr, "little"))
         if not current & SETTING_POWERED:
-            return f"hci{self._index} ist nicht eingeschaltet (bluetoothctl power on)"
+            hint = diagnose.rfkill_hint() or "bluetoothctl power on"
+            return f"hci{self._index} ist nicht eingeschaltet ({hint})"
         if not current & SETTING_LE:
             return f"hci{self._index} unterstützt kein Bluetooth Low Energy"
         return None

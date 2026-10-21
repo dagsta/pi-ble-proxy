@@ -122,7 +122,7 @@ class Device(ServiceInterface):
         self.fake.calls.append("Connect")
         if self.fake.fail_connect or self.fake.abort_first > 0:
             self.fake.abort_first -= 1
-            raise DBusError("org.bluez.Error.Failed", "le-connection-abort-by-local")
+            raise DBusError("org.bluez.Error.Failed", self.fake.fail_text)
         await asyncio.sleep(self.fake.connect_delay)
         self._connected = True
         self.emit_properties_changed({"Connected": True})
@@ -250,7 +250,8 @@ class Descriptor(ServiceInterface):
 
 
 class FakeBluez:
-    def __init__(self, device_known=True):
+    def __init__(self, device_known=True, monitor_manager=True):
+        self.monitor_manager, self.fail_text = monitor_manager, "le-connection-abort-by-local"
         self.calls, self.fail_connect, self.fail_write = [], False, False
         self.discovering, self.filter, self.abort_first = False, {}, 0
         self.fail_monitor, self.agent_dest, self.agent_answers = False, None, []
@@ -263,7 +264,8 @@ class FakeBluez:
         self.bus = await MessageBus(bus_address=bus_address).connect()
         self.adapter = Adapter(self)
         self.bus.export("/org/bluez/hci0", self.adapter)
-        self.bus.export("/org/bluez/hci0", MonitorManager(self))
+        if self.monitor_manager:
+            self.bus.export("/org/bluez/hci0", MonitorManager(self))
         self.bus.export("/org/bluez", AgentManager(self))
         if self.device_known:
             self.appear()

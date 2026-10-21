@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING
+
+from . import diagnose
 
 if TYPE_CHECKING:
     from .server import ApiServer
@@ -12,6 +15,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 SENSOR_INTERVAL = 30
+HINT_REPEAT = 600  # Hinweise höchstens alle 10 Minuten wiederholen
 
 
 class Supervisor:
@@ -23,6 +27,7 @@ class Supervisor:
         self.failures = 0
         self._tasks: list[asyncio.Task] = []
         self._last_stats = server.stats.snapshot()
+        self._hinted: dict[str, float] = {}
 
     def start(self) -> None:
         cfg = self.server.config
@@ -86,9 +91,19 @@ class Supervisor:
         else:
             self.failures += 1
             log.warning("Überwachung: %s (%d/%d)", problem, self.failures, srv.config.watchdog_failures)
+            self.log_hints()
             if self.failures >= srv.config.watchdog_failures:
                 srv.fail(f"Bluetooth dauerhaft gestört: {problem}")
         srv.set_scanner_problem(problem)
+        if diagnose.undervoltage_hint():
+            self.log_hints()  # Unterspannung ist auch ohne erkanntes Problem eine Warnung wert
+
+    def log_hints(self) -> None:
+        now = time.monotonic()
+        for hint in diagnose.hints():
+            if now - self._hinted.get(hint, -HINT_REPEAT) >= HINT_REPEAT:
+                self._hinted[hint] = now
+                log.warning("Hinweis: %s", hint)
 
     def log_stats(self) -> None:
         now = self.server.stats.snapshot()

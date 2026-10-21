@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dbus_fast import BusType, Message, MessageType, Variant
 from dbus_fast.aio import MessageBus
 
-from . import gatt
+from . import diagnose, gatt
 from .agent import AGENT_CAPABILITY, AGENT_PATH, MONITOR_APP, MONITOR_PATH, AdvertisementMonitor, PairingAgent
 from .gatt import Characteristic, Descriptor, GattError, Service
 
@@ -63,6 +63,7 @@ class BluezBackend:
         self._agent = PairingAgent()
         self._monitor = AdvertisementMonitor()
         self._monitor_registered = False
+        self._passive_unavailable: str | None = None  # Grund, sobald klar ist, dass passiv nicht geht
         self._tasks: set[asyncio.Task] = set()
         self.available = False  # False, solange bluetoothd nicht auf D-Bus erreichbar ist
         self._pausers = 0
@@ -108,13 +109,37 @@ class BluezBackend:
         """Startet den Scan im eingestellten Modus (BlueZ scannt, nur dann kennt es Geräte)."""
         await self._begin_scanning()
 
-    async def _begin_scanning(self) -> None:
+    async def _begin_scanning(self, *, fallback: bool = True) -> None:
+        """Startet den Scan im gewünschten Modus. Geht passiv nicht, fällt er (mit ``fallback``)
+        auf aktiv zurück; ohne ``fallback`` wird der Fehler weitergereicht."""
         if self._scan_mode == "passive":
-            await self._stop_active_discovery()
-            await self._register_monitor()
+            try:
+                await self._ensure_passive_possible()
+                await self._stop_active_discovery()
+                await self._register_monitor()
+                return
+            except GattError as exc:
+                if not fallback:
+                    raise
+                log.warning("Passiver Scan nicht möglich (%s) – nutze aktiven Scan", exc)
+                self._scan_mode = "active"
+        await self._unregister_monitor()
+        await self._start_active_discovery()
+
+    async def _ensure_passive_possible(self) -> None:
+        if self._passive_unavailable:
+            raise GattError(self._passive_unavailable)
+        version = await diagnose.bluez_version()
+        shown = "{}.{}".format(*version) if version else "unbekannt"
+        if version and version < diagnose.MIN_PASSIVE_VERSION:
+            self._passive_unavailable = f"BlueZ {shown} ist zu alt (nötig: ab 5.56)"
         else:
-            await self._unregister_monitor()
-            await self._start_active_discovery()
+            objects = await self.managed_objects()
+            if MONITOR_MANAGER not in objects.get(self._adapter, {}):
+                self._passive_unavailable = (f"BlueZ {shown} bietet keinen Advertisement-Monitor "
+                                             "(nötig: ab 5.56, ggf. bluetoothd --experimental)")
+        if self._passive_unavailable:
+            raise GattError(self._passive_unavailable)
 
     async def _start_active_discovery(self) -> None:
         flt = {"Transport": Variant("s", "le"), "DuplicateData": Variant("b", True)}
@@ -134,7 +159,12 @@ class BluezBackend:
     async def _register_monitor(self) -> None:
         if self._monitor_registered:
             return
-        await self.call(self._adapter, MONITOR_MANAGER, "RegisterMonitor", "o", [MONITOR_APP])
+        try:
+            await self.call(self._adapter, MONITOR_MANAGER, "RegisterMonitor", "o", [MONITOR_APP])
+        except GattError as exc:
+            if any(word in str(exc) for word in ("NotSupported", "UnknownMethod", "UnknownInterface")):
+                self._passive_unavailable = f"RegisterMonitor nicht unterstützt: {exc}"  # nicht erneut versuchen
+            raise
         self._monitor_registered = True
 
     async def _unregister_monitor(self) -> None:
@@ -153,7 +183,7 @@ class BluezBackend:
             return
         previous, self._scan_mode = self._scan_mode, mode
         try:
-            await self._begin_scanning()
+            await self._begin_scanning(fallback=False)
         except GattError:
             self._scan_mode = previous
             try:

@@ -15,6 +15,7 @@ max_connections = 4
 adapter = "hci0"
 max_connections = 3              # gleichzeitige aktive GATT-Verbindungen
 pause_scan_on_connect = true     # Scan während des Verbindens stoppen (wie ESPHome)
+connect_backoff_step = 5          # nach 2 Verbindungsfehlern in Folge pro Gerät 5 s, 10 s, … (max. 60 s) Pause; 0 = aus
 scan_mode = "active"             # "active" (mit Scan-Responses) oder "passive" (experimentell); HA kann umschalten
 
 [watchdog]
