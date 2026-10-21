@@ -17,6 +17,7 @@ jobs:
   release:
     needs: test
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write  # nötig, um das Release anzulegen
     steps:

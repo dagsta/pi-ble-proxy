@@ -111,6 +111,7 @@ class MgmtScanner:
         self._restart_handle: asyncio.TimerHandle | None = None
         self.adapter_address = "00:00:00:00:00:00"
         self.present = True  # False, solange der Kernel den Adapter nicht meldet
+        self.dead: str | None = None  # Grund, sobald der Socket unbrauchbar ist
 
     # Lebenszyklus ----------------------------------------------------------
     async def start(
@@ -150,6 +151,8 @@ class MgmtScanner:
         """Gesundheitsprüfung: Adapter da und eingeschaltet? Gibt das Problem zurück oder None."""
         try:
             problem = await asyncio.wait_for(self._read_info(), 3)
+        except MgmtError as exc:
+            return str(exc)
         except (asyncio.TimeoutError, OSError) as exc:
             return f"mgmt-Socket antwortet nicht ({type(exc).__name__})"
         self.present = problem is None or "nicht eingeschaltet" in problem
@@ -197,6 +200,8 @@ class MgmtScanner:
 
     # Socket ----------------------------------------------------------------
     async def _command(self, opcode: int, params: bytes = b"") -> tuple[int, bytes]:
+        if self.dead:
+            raise MgmtError(f"mgmt-Socket geschlossen: {self.dead}")
         future = self._loop.create_future()
         self._pending[opcode] = future
         self._sock.send(_HEADER.pack(opcode, self._index, len(params)) + params)
@@ -211,11 +216,28 @@ class MgmtScanner:
                 packet = self._sock.recv(65535)
             except BlockingIOError:
                 return
+            except InterruptedError:
+                continue
             except OSError as exc:
-                log.error("mgmt-Socket: %s", exc)
+                self._socket_died(str(exc))
+                return
+            if not packet:  # leere Antwort = Gegenstelle hat geschlossen; ohne Abbruch drehte sich die Schleife endlos
+                self._socket_died("vom Kernel geschlossen")
                 return
             if len(packet) >= _HEADER.size:
                 self._on_packet(packet)
+
+    def _socket_died(self, reason: str) -> None:
+        """Socket ist nicht mehr nutzbar: nicht weiter abfragen, Wartende abbrechen, Überwachung melden lassen."""
+        if self.dead:
+            return
+        self.dead = reason
+        log.error("mgmt-Socket unbrauchbar (%s); die Überwachung meldet das als Störung", reason)
+        if self._sock is not None:
+            self._loop.remove_reader(self._sock.fileno())
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(MgmtError(f"mgmt-Socket geschlossen: {reason}"))
 
     def _on_packet(self, packet: bytes) -> None:
         event, index, length = _HEADER.unpack_from(packet)

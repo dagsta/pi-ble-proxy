@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import socket
 import struct
 
@@ -219,3 +220,49 @@ def test_python_without_bluetooth_support_gives_a_clear_error(monkeypatch):
     monkeypatch.delattr(socket, "AF_BLUETOOTH", raising=False)
     with pytest.raises(MgmtError, match="ohne Bluetooth-Unterstützung"):
         mgmt.open_mgmt_socket()
+
+
+def test_closed_kernel_socket_does_not_spin_the_event_loop(caplog):
+    """Regression: Eine leere Antwort (Gegenstelle zu) ließ _on_readable endlos laufen und blockierte alles."""
+    async def main():
+        loop = asyncio.get_running_loop()
+        ours, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        ours.setblocking(False), theirs.setblocking(False)
+        kernel = FakeKernel(loop, theirs)
+        scanner = MgmtScanner(0, sock=ours)
+        await scanner.start(lambda a: None, discover=False)
+
+        loop.remove_reader(theirs.fileno())
+        theirs.close()  # Kernel-Seite weg
+        start = loop.time()
+        await asyncio.sleep(0.2)  # früher: Endlosschleife, man kam hier nie an
+        assert loop.time() - start < 1
+
+        problem = await scanner.check()
+        assert problem and "geschlossen" in problem
+        assert scanner.dead
+        await scanner.stop()
+        return kernel
+
+    with caplog.at_level(logging.ERROR, logger="pi_ble_proxy.mgmt"):
+        run(main())
+    assert sum("unbrauchbar" in r.message for r in caplog.records) == 1  # einmal melden, nicht fluten
+
+
+def test_pending_command_fails_immediately_when_socket_dies():
+    async def main():
+        loop = asyncio.get_running_loop()
+        ours, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        ours.setblocking(False), theirs.setblocking(False)
+        scanner = MgmtScanner(0, sock=ours)
+        scanner._loop = loop
+        loop.add_reader(ours.fileno(), scanner._on_readable)
+        command = asyncio.ensure_future(scanner._command(mgmt.OP_READ_INFO))
+        await asyncio.sleep(0.05)  # Kommando ist raus, keine Antwort
+        theirs.close()
+        start = loop.time()
+        with pytest.raises(MgmtError, match="geschlossen"):
+            await command
+        assert loop.time() - start < 1  # nicht erst nach dem 5-s-Timeout
+
+    run(main())

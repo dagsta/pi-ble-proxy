@@ -75,7 +75,7 @@ Siehe `config.example.toml`. Wichtig im Dauerbetrieb:
 
 Laufzeit: `python3-cryptography` (X25519, ChaCha20-Poly1305) und `python3-dbus-fast` (BlueZ per D-Bus).
 Alles andere ist Standardbibliothek. Ohne `python3-dbus-fast` läuft der Proxy nur passiv.
-Nur für Tests: `pytest`, `aioesphomeapi`, `noiseprotocol`, `dbus-fast`.
+Nur für Tests: `pytest`, `pytest-timeout`, `aioesphomeapi`, `noiseprotocol`, `dbus-fast`.
 
 ## Werkzeug zum Testen
 
@@ -104,7 +104,7 @@ MIT, siehe [LICENSE](LICENSE).
 
 ```
 python -m venv --system-site-packages .venv
-.venv/bin/pip install pytest aioesphomeapi noiseprotocol dbus-fast
+.venv/bin/pip install pytest pytest-timeout aioesphomeapi noiseprotocol dbus-fast
 .venv/bin/python -m pytest
 ```
 

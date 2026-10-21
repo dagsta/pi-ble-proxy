@@ -9,3 +9,7 @@ dependencies = ["cryptography"]  # Debian: python3-cryptography
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# pytest-timeout: ein hängender Test soll den Lauf beenden und die Stelle ausgeben, statt ihn zu blockieren.
+# "thread" statt "signal": asyncio verschluckt die Ausnahme der Signal-Methode, wenn der Test in einem Callback hängt.
+timeout = 60
+timeout_method = "thread"
