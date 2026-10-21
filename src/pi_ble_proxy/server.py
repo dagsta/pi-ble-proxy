@@ -43,7 +43,11 @@ MAX_WRITE_BUFFER = 256 * 1024  # langsame Clients: Advertisements verwerfen stat
 MAX_BACKOFF = 60  # Sekunden
 BACKOFF_AFTER = 2  # Fehlversuche in Folge, ab denen die Pause greift
 HANDSHAKE_TIMEOUT = 10
-IDLE_TIMEOUT = 120  # HA schickt alle ~20 s einen Ping
+# Wie bei einem ESP32: wir pingen selbst. Der HA-Client pingt nur, solange er nichts empfängt; bei laufenden
+# Advertisements bekäme der Proxy sonst von HA nie ein Lebenszeichen und würde sie fälschlich trennen.
+KEEPALIVE_INTERVAL = 60  # nach so vielen Sekunden ohne Empfang schicken wir ein PingRequest
+DISCONNECT_AFTER = 150  # ohne jede Antwort in dieser Zeit gilt die Verbindung als tot
+BODY_TIMEOUT = 10  # Rest eines Frames muss nach dem Header zügig folgen
 
 
 class ApiServer:
@@ -60,6 +64,7 @@ class ApiServer:
         self.stats = Stats()
         self.failed: asyncio.Future | None = None  # wird gesetzt, wenn sich der Dienst beenden soll
         self.scanner_problem: str | None = None
+        self.last_mode_error: str | None = None
         self._connect_failures: dict[int, tuple[int, float]] = {}  # Adresse -> (Fehler in Folge, Zeitpunkt)
         self._supervisor: Supervisor | None = None
 
@@ -241,6 +246,7 @@ class Session:
         self.wants_advertisements = False
         self.wants_free = False
         self.wants_states = False
+        self._last_rx = time.monotonic()
         self._tasks: set[asyncio.Task] = set()
         self._send: CipherState | None = None
         self._recv: CipherState | None = None
@@ -283,13 +289,15 @@ class Session:
     def _write_frame(self, body: bytes) -> None:
         self.writer.write(b"\x01" + struct.pack(">H", len(body)) + body)
 
-    async def _read_frame(self) -> bytes:
-        header = await self.reader.readexactly(3)
+    async def _read_frame(self, header_timeout: float | None = None) -> bytes:
+        """Liest einen Frame. Der Timeout gilt nur fürs Warten auf den Header: bricht er ab, bleiben
+        eventuell schon angekommene Bytes im Puffer, und der Datenstrom bleibt im Takt."""
+        header = await asyncio.wait_for(self.reader.readexactly(3), header_timeout)
         if header[0] != 0x01:
             raise ConnectionError(
                 "Klartext-Protokoll nicht unterstützt" if header[0] == 0 else "ungültiges Preamble"
             )
-        return await self.reader.readexactly(int.from_bytes(header[1:], "big"))
+        return await asyncio.wait_for(self.reader.readexactly(int.from_bytes(header[1:], "big")), BODY_TIMEOUT)
 
     def send(self, message: Message) -> None:
         self.send_raw(message.ID, message.encode())
@@ -306,7 +314,15 @@ class Session:
         if not await asyncio.wait_for(self._handshake(), HANDSHAKE_TIMEOUT):
             return
         while not self._closing:
-            frame = await asyncio.wait_for(self._read_frame(), IDLE_TIMEOUT)
+            try:
+                frame = await self._read_frame(KEEPALIVE_INTERVAL)
+            except asyncio.TimeoutError:
+                if time.monotonic() - self._last_rx >= DISCONNECT_AFTER:
+                    raise  # keine Antwort auf unsere Pings: Verbindung ist tot
+                self.send(m.PingRequest())
+                await self.writer.drain()
+                continue
+            self._last_rx = time.monotonic()
             try:
                 plain = self._recv.decrypt(b"", frame)
             except Exception:
@@ -406,7 +422,10 @@ class Session:
             if self.server.gatt is not None:
                 await self.server.gatt.set_scan_mode(mode)
         except GattError as exc:
-            log.warning("%s: Scan-Modus %s nicht möglich: %s", self.peer, mode, exc)
+            # HA fordert den Modus bei jeder Verbindung erneut an: nur die erste Meldung als Warnung
+            level = logging.DEBUG if self.server.last_mode_error == str(exc) else logging.WARNING
+            self.server.last_mode_error = str(exc)
+            log.log(level, "%s: Scan-Modus %s nicht möglich: %s", self.peer, mode, exc)
         self.server.broadcast_scanner_state()  # meldet den tatsächlichen Modus zurück
 
     def _subscribe_adv(self, _: m.SubscribeBluetoothLEAdvertisementsRequest) -> None:

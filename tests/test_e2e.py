@@ -124,3 +124,64 @@ def test_connection_limit():
         await first.disconnect()
 
     asyncio.run(with_server(test, max_connections=1))
+
+
+# --- Keepalive -----------------------------------------------------------------------------
+
+def test_server_pings_itself_so_a_busy_connection_survives(monkeypatch):
+    """Der HA-Client pingt nicht, solange er Daten empfängt. Der Proxy darf ihn deshalb nicht trennen."""
+    from pi_ble_proxy import server as srv
+
+    monkeypatch.setattr(srv, "KEEPALIVE_INTERVAL", 0.2)
+    monkeypatch.setattr(srv, "DISCONNECT_AFTER", 0.6)
+
+    async def test(server, scanner):
+        client = client_for(server)
+        await client.connect(login=True)
+        pings = []
+        client._get_connection().add_message_callback(lambda msg: pings.append(msg),
+                                                       (aioesphomeapi.core.PingRequest,))
+        client.subscribe_bluetooth_le_raw_advertisements(lambda r: None)
+        for _ in range(15):  # 1,5 s steter Datenverkehr in Richtung HA, von HA kommt nichts
+            scanner.emit(Advertisement(1, 0, -50, b""))
+            await asyncio.sleep(0.1)
+        assert pings, "Server hat nie ein PingRequest geschickt"
+        assert (await client.device_info()).name == "pi-ble-proxy"  # Verbindung lebt noch
+        await client.disconnect()
+
+    asyncio.run(with_server(test))
+
+
+def test_silent_dead_client_is_dropped_after_pings_go_unanswered(monkeypatch):
+    from pi_ble_proxy import server as srv
+    from pi_ble_proxy.noise import Handshake
+
+    monkeypatch.setattr(srv, "KEEPALIVE_INTERVAL", 0.2)
+    monkeypatch.setattr(srv, "DISCONNECT_AFTER", 0.7)
+
+    async def test(server, scanner):
+        reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+
+        async def frame():
+            header = await reader.readexactly(3)
+            return await reader.readexactly(int.from_bytes(header[1:], "big"))
+
+        hs = Handshake(KEY, initiator=True)
+        writer.write(b"\x01\x00\x00")  # Hello
+        await frame()  # ServerHello
+        msg1 = b"\x00" + hs.write_message1()
+        writer.write(b"\x01" + len(msg1).to_bytes(2, "big") + msg1)
+        reply = await frame()
+        hs.read_message2(reply[1:])
+        _, recv = hs.split()
+
+        ping = recv.decrypt(b"", await asyncio.wait_for(frame(), 2))
+        assert int.from_bytes(ping[:2], "big") == 7  # PingRequest
+        start = asyncio.get_running_loop().time()
+        with pytest.raises(asyncio.IncompleteReadError):  # wir antworten nie: Server schließt
+            while True:
+                await asyncio.wait_for(frame(), 3)
+        assert 0.5 < asyncio.get_running_loop().time() - start < 2.5
+        writer.close()
+
+    asyncio.run(with_server(test))
