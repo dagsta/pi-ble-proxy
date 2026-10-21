@@ -17,6 +17,7 @@ chmod 755 "$PKG/usr/bin/pi-ble-proxy"
 install -m 644 packaging/pi-ble-proxy.service "$PKG/lib/systemd/system/"
 install -m 644 config.example.toml "$PKG/usr/share/pi-ble-proxy/"
 install -m 644 README.md "$PKG/usr/share/doc/pi-ble-proxy/"
+install -m 644 README.en.md "$PKG/usr/share/doc/pi-ble-proxy/"
 install -m 644 packaging/copyright "$PKG/usr/share/doc/pi-ble-proxy/copyright"
 install -m 755 packaging/postinst packaging/prerm packaging/postrm "$PKG/DEBIAN/"
 

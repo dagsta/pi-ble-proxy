@@ -1,7 +1,14 @@
 # pi-ble-proxy
 
+Deutsch | [English](README.en.md)
+
 Raspberry Pi als Bluetooth-Proxy für Home Assistant. Die Software gibt sich als ESPHome-Gerät mit
 `bluetooth_proxy` aus (Native API, Noise-verschlüsselt); HA behandelt den Pi dann wie einen ESP32-Proxy.
+
+> **Hinweis zur Entstehung:** Der Code dieses Projekts wurde **primär von Claude** geschrieben (KI-Modell von
+> Anthropic, genutzt über Claude Code). Der Autor hat die Anforderungen vorgegeben, die Software auf echter Hardware
+> getestet und Fehler gemeldet; auch die Korrekturen sind mit Claude entstanden. Rechne mit Fehlern und prüfe den Code,
+> bevor du ihn für sicherheitsrelevante Zwecke einsetzt.
 
 ## Funktionen
 
@@ -27,15 +34,17 @@ Raspberry Pi als Bluetooth-Proxy für Home Assistant. Die Software gibt sich als
   SwitchBot; die Namen sind Marken ihrer Inhaber und stehen hier nur zur Beschreibung der Kompatibilität. Gegenüber
   Home Assistant meldet sich der Proxy als ESPHome-kompatibles Gerät (mDNS-Typ `_esphomelib._tcp`, Versionsangabe
   `2025.10.0`), damit dessen ESPHome-Integration ihn akzeptiert.
-- **Entstehung.** Der Code ist mit Unterstützung eines KI-Modells (Claude) entstanden und wird über Tests und den
-  Betrieb auf echter Hardware abgesichert (siehe unten).
 
 ## Stand der Prüfung
 
-Auf einem Pi 4 mit einem SwitchBot Lock in Home Assistant geprüft: passiver Scan, Verbinden, Schreiben, Notifications.
-Nur gegen ein simuliertes BlueZ getestet (nicht auf echter Hardware): Pairing, passiver Scan-Modus samt Rückfall,
-Pause nach Verbindungsfehlern, Wiederherstellung nach `bluetoothd`-Neustart, die Diagnose-Sensoren in HA, die
-rfkill-/Unterspannungs-Hinweise (Erkennung über sysfs) und das Debian-Paket.
+Auf einem Raspberry Pi 4 (Raspberry Pi OS auf Debian 12, BlueZ 5.66) mit einem SwitchBot Lock in Home Assistant geprüft:
+Weiterleiten von Advertisements, Verbinden, Schreiben und Notifications, dauerhaft stabile Verbindung zu HA, die
+Diagnose-Sensoren in HA sowie Installation und Update über das Debian-Paket. Der Rückfall auf den aktiven Scan, wenn
+BlueZ keinen Advertisement-Monitor anbietet, ist ebenfalls im Betrieb beobachtet.
+
+Nur gegen ein simuliertes BlueZ getestet (nicht auf echter Hardware): Pairing, der passive Scan-Modus, die Pause nach
+Verbindungsfehlern, die Wiederherstellung nach einem `bluetoothd`-Neustart und die rfkill-/Unterspannungs-Hinweise
+(Erkennung über sysfs).
 
 ## Installation (Debian-Paket)
 
