@@ -422,8 +422,12 @@ class Session:
             if self.server.gatt is not None:
                 await self.server.gatt.set_scan_mode(mode)
         except GattError as exc:
-            # HA fordert den Modus bei jeder Verbindung erneut an: nur die erste Meldung als Warnung
-            level = logging.DEBUG if self.server.last_mode_error == str(exc) else logging.WARNING
+            # HA fordert den Modus bei jeder Verbindung erneut an: jede Meldung nur einmal. Eine Warnung ist es
+            # nur, wenn wir den Modus selbst konfiguriert haben; ein Wunsch von HA, den wir ablehnen, ist Info.
+            if self.server.last_mode_error == str(exc):
+                level = logging.DEBUG
+            else:
+                level = logging.WARNING if self.server.config.scan_mode == mode else logging.INFO
             self.server.last_mode_error = str(exc)
             log.log(level, "%s: Scan-Modus %s nicht möglich: %s", self.peer, mode, exc)
         self.server.broadcast_scanner_state()  # meldet den tatsächlichen Modus zurück

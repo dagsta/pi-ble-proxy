@@ -19,6 +19,17 @@ Raspberry Pi als Bluetooth-Proxy für Home Assistant. Die Software gibt sich als
   Advertisements; repariert, was möglich ist, und beendet sich sonst mit Exit-Code 1, damit systemd neu startet.
 - **Diagnose:** Statistik-Zeile im Log und drei Sensoren in HA (CPU-Temperatur, Advertisements, aktive Verbindungen).
 
+## Hinweise
+
+- **Ohne Gewähr.** Das Projekt kann Türschlösser und andere Geräte steuern. Setze es nicht als einzige Zugangsmöglichkeit
+  ein und teste es vor sicherheitsrelevanter Nutzung selbst. Die Lizenz (MIT) schließt jede Haftung aus.
+- **Keine Verbindung zu anderen Projekten.** Es besteht keine Verbindung zu ESPHome, Home Assistant, Nabu Casa oder
+  SwitchBot; die Namen sind Marken ihrer Inhaber und stehen hier nur zur Beschreibung der Kompatibilität. Gegenüber
+  Home Assistant meldet sich der Proxy als ESPHome-kompatibles Gerät (mDNS-Typ `_esphomelib._tcp`, Versionsangabe
+  `2025.10.0`), damit dessen ESPHome-Integration ihn akzeptiert.
+- **Entstehung.** Der Code ist mit Unterstützung eines KI-Modells (Claude) entstanden und wird über Tests und den
+  Betrieb auf echter Hardware abgesichert (siehe unten).
+
 ## Stand der Prüfung
 
 Auf einem Pi 4 mit einem SwitchBot Lock in Home Assistant geprüft: passiver Scan, Verbinden, Schreiben, Notifications.
@@ -61,6 +72,10 @@ Nur für Tests: `pytest`, `aioesphomeapi`, `noiseprotocol`, `dbus-fast`.
 
 `tools/proxy_client.py` spricht die API direkt an (Scan, Pairing, Services), ohne Home Assistant.
 Es läuft auf jedem Rechner im Netz mit `pip install aioesphomeapi`; Details in der Kopfzeile der Datei.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE).
 
 ## Tests
 

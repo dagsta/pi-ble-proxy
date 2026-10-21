@@ -493,3 +493,16 @@ def test_mgmt_error_names_rfkill_when_adapter_is_off(monkeypatch):
             await mgmt.MgmtScanner(0, sock=ours).start(lambda a: None)
 
     asyncio.run(main())
+
+
+def test_refused_scan_mode_is_info_not_warning_when_not_configured(bus_address, caplog):
+    """HA wünscht sich 'passiv' bei jeder Verbindung; das ist bei Standardkonfiguration keine Warnung wert."""
+    async def test(client, fake, server):
+        for _ in range(2):
+            client.bluetooth_scanner_set_mode(aioesphomeapi.BluetoothScannerMode.PASSIVE)
+            await asyncio.sleep(0.3)
+
+    with caplog.at_level(logging.DEBUG, logger="pi_ble_proxy.server"):
+        scenario(bus_address, test, fake_args={"monitor_manager": False})
+    refused = [r for r in caplog.records if "Scan-Modus passive nicht möglich" in r.message]
+    assert [r.levelno for r in refused] == [logging.INFO, logging.DEBUG]  # erst Info, Wiederholung nur Debug
