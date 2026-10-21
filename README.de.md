@@ -82,6 +82,20 @@ Nur für Tests: `pytest`, `aioesphomeapi`, `noiseprotocol`, `dbus-fast`.
 `tools/proxy_client.py` spricht die API direkt an (Scan, Pairing, Services), ohne Home Assistant.
 Es läuft auf jedem Rechner im Netz mit `pip install aioesphomeapi`; Details in der Kopfzeile der Datei.
 
+## Releases
+
+Releases baut GitHub Actions automatisch: Version in `src/pi_ble_proxy/__init__.py` und `pyproject.toml` erhöhen,
+committen und dann einen dazu passenden Tag pushen:
+
+```
+git tag v0.3.3
+git push origin v0.3.3
+```
+
+Der Workflow führt die Tests aus, baut das `.deb`-Paket und veröffentlicht ein Release mit dem Paket und einer
+`SHA256SUMS`-Datei. Ein Tag mit Zusatz wie `v0.3.3-rc1` erzeugt ein Vorab-Release. Einen Download prüfst du mit
+`sha256sum -c SHA256SUMS`. Die Tests laufen außerdem bei jedem Push und jedem Pull Request.
+
 ## Lizenz
 
 MIT, siehe [LICENSE](LICENSE).

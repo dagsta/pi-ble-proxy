@@ -1,0 +1,42 @@
+name: Release
+
+# Auslösen: Version im Code erhöhen, committen, dann einen Tag pushen, z. B.
+#   git tag v0.3.3 && git push origin v0.3.3
+# Ein Tag mit Zusatz (v0.3.3-rc1) erzeugt ein Vorab-Release (prerelease).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/tests.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write  # nötig, um das Release anzulegen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag muss zur Version im Code passen
+        env:
+          TAG: ${{ github.ref_name }}
+        run: sh packaging/check-version.sh "$TAG"
+      - name: Debian-Paket bauen
+        run: sh packaging/build-deb.sh dist
+      - name: Prüfsummen erzeugen
+        run: cd dist && sha256sum -- *.deb > SHA256SUMS && cat SHA256SUMS
+      - name: Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=""
+          case "$TAG" in *-*) flags="--prerelease" ;; esac
+          gh release create "$TAG" dist/*.deb dist/SHA256SUMS \
+            --title "$TAG" --generate-notes --verify-tag $flags

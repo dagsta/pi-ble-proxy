@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:  # wird auch vom Release-Workflow verwendet
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]  # 3.11 ist das Python von Raspberry Pi OS (Debian 12)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: dbus-daemon für das simulierte BlueZ
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus
+      - name: Abhängigkeiten
+        run: python -m pip install pytest aioesphomeapi noiseprotocol dbus-fast cryptography
+      - name: Tests
+        run: python -m pytest -q
+
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Shell-Skripte auf Syntaxfehler prüfen
+        run: for f in packaging/*.sh packaging/postinst packaging/prerm packaging/postrm; do sh -n "$f"; done
+      - name: Debian-Paket bauen
+        run: sh packaging/build-deb.sh dist
+      - name: Paketinhalt anzeigen
+        run: dpkg-deb --info dist/*.deb && dpkg-deb --contents dist/*.deb
