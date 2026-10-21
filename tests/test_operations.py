@@ -506,3 +506,15 @@ def test_refused_scan_mode_is_info_not_warning_when_not_configured(bus_address, 
         scenario(bus_address, test, fake_args={"monitor_manager": False})
     refused = [r for r in caplog.records if "Scan-Modus passive nicht möglich" in r.message]
     assert [r.levelno for r in refused] == [logging.INFO, logging.DEBUG]  # erst Info, Wiederholung nur Debug
+
+
+def test_periodic_statistics_run_without_errors(bus_address, caplog):
+    """Über den echten Zeitgeber (nicht durch direkten Aufruf): kein Fehler, Zeile kommt wiederholt."""
+    async def test(client, fake, server):
+        server.scanner.emit(Advertisement(1, 0, -50, b""))
+        await asyncio.sleep(0.5)
+
+    with caplog.at_level(logging.INFO, logger="pi_ble_proxy.supervisor"):
+        scenario(bus_address, test, with_bluez=False, stats_interval=0.1)
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
+    assert sum("Statistik:" in r.message for r in caplog.records) >= 3

@@ -1,6 +1,6 @@
 [project]
 name = "pi-ble-proxy"
-version = "0.3.2"
+version = "0.3.3"
 description = "Raspberry Pi als Bluetooth-Proxy für Home Assistant (ESPHome Native API)"
 requires-python = ">=3.11"
 license = "MIT"
