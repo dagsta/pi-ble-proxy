@@ -1,8 +1,8 @@
 name: Release
 
 # Auslösen: Version im Code erhöhen, committen, dann einen Tag pushen, z. B.
-#   git tag v0.3.3 && git push origin v0.3.3
-# Ein Tag mit Zusatz (v0.3.3-rc1) erzeugt ein Vorab-Release (prerelease).
+#   git tag v0.3.4 && git push origin v0.3.4
+# Ein Tag mit Zusatz (v0.3.4-rc1) erzeugt ein Vorab-Release (prerelease).
 on:
   push:
     tags: ["v*"]

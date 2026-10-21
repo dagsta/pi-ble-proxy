@@ -66,6 +66,9 @@ def open_mgmt_socket() -> socket.socket:
 
     ``socket.bind`` kann in Python nur den RAW-Kanal, daher der Aufruf über libc.
     """
+    if not hasattr(socket, "AF_BLUETOOTH"):
+        raise MgmtError("Dieses Python wurde ohne Bluetooth-Unterstützung gebaut (socket.AF_BLUETOOTH fehlt); "
+                        "das System-Python von Debian/Raspberry Pi OS (/usr/bin/python3) verwenden")
     sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_RAW | socket.SOCK_NONBLOCK, socket.BTPROTO_HCI)
     try:
         libc = ctypes.CDLL(None, use_errno=True)

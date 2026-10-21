@@ -89,12 +89,12 @@ Releases are built automatically by GitHub Actions: raise the version in `src/pi
 `pyproject.toml`, commit, then push a tag that matches it:
 
 ```
-git tag v0.3.3
-git push origin v0.3.3
+git tag v0.3.4
+git push origin v0.3.4
 ```
 
 The workflow runs the tests, builds the `.deb` package and publishes a release with the package and a `SHA256SUMS` file.
-A tag with a suffix such as `v0.3.3-rc1` creates a pre-release. Verify a download with
+A tag with a suffix such as `v0.3.4-rc1` creates a pre-release. Verify a download with
 `sha256sum -c SHA256SUMS`. Tests also run on every push and pull request.
 
 ## License

@@ -88,12 +88,12 @@ Releases baut GitHub Actions automatisch: Version in `src/pi_ble_proxy/__init__.
 committen und dann einen dazu passenden Tag pushen:
 
 ```
-git tag v0.3.3
-git push origin v0.3.3
+git tag v0.3.4
+git push origin v0.3.4
 ```
 
 Der Workflow führt die Tests aus, baut das `.deb`-Paket und veröffentlicht ein Release mit dem Paket und einer
-`SHA256SUMS`-Datei. Ein Tag mit Zusatz wie `v0.3.3-rc1` erzeugt ein Vorab-Release. Einen Download prüfst du mit
+`SHA256SUMS`-Datei. Ein Tag mit Zusatz wie `v0.3.4-rc1` erzeugt ein Vorab-Release. Einen Download prüfst du mit
 `sha256sum -c SHA256SUMS`. Die Tests laufen außerdem bei jedem Push und jedem Pull Request.
 
 ## Lizenz

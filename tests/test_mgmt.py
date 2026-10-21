@@ -134,7 +134,7 @@ def test_real_socket_binds_and_reports_missing_adapter():
     """Echter Kernel-Socket (ohne Hardware): Bind klappt, hci0 existiert nur ggf. nicht."""
     try:
         sock = mgmt.open_mgmt_socket()
-    except OSError as exc:
+    except (OSError, MgmtError) as exc:  # z. B. CI-Rechner: Python ohne Bluetooth oder ohne Rechte
         pytest.skip(f"kein mgmt-Socket in dieser Umgebung: {exc}")
 
     async def main():
@@ -212,3 +212,10 @@ def test_check_reports_adapter_problems():
         await scanner.stop()
 
     run(main())
+
+
+def test_python_without_bluetooth_support_gives_a_clear_error(monkeypatch):
+    """Z. B. ein selbst gebautes Python oder der GitHub-Rechner: keine kryptische AttributeError-Meldung."""
+    monkeypatch.delattr(socket, "AF_BLUETOOTH", raising=False)
+    with pytest.raises(MgmtError, match="ohne Bluetooth-Unterstützung"):
+        mgmt.open_mgmt_socket()
