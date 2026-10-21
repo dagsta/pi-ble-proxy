@@ -1,90 +1,91 @@
 # pi-ble-proxy
 
-Deutsch | [English](README.en.md)
+[Deutsch](README.de.md) | English
 
-Raspberry Pi als Bluetooth-Proxy für Home Assistant. Die Software gibt sich als ESPHome-Gerät mit
-`bluetooth_proxy` aus (Native API, Noise-verschlüsselt); HA behandelt den Pi dann wie einen ESP32-Proxy.
+A Raspberry Pi as a Bluetooth proxy for Home Assistant. The software presents itself as an ESPHome device with
+`bluetooth_proxy` (Native API, Noise-encrypted), so Home Assistant treats the Pi like an ESP32 proxy.
 
-> **Hinweis zur Entstehung:** Der Code dieses Projekts wurde **primär von Claude** geschrieben (KI-Modell von
-> Anthropic, genutzt über Claude Code). Der Autor hat die Anforderungen vorgegeben, die Software auf echter Hardware
-> getestet und Fehler gemeldet; auch die Korrekturen sind mit Claude entstanden. Rechne mit Fehlern und prüfe den Code,
-> bevor du ihn für sicherheitsrelevante Zwecke einsetzt.
+> **Note on how this was made:** The code in this project was written **primarily by Claude** (an AI model by
+> Anthropic, used through Claude Code). The author set the requirements, tested the software on real hardware and
+> reported bugs; the fixes were again produced with Claude. Expect bugs, and review the code before you rely on it for
+> anything security-relevant.
 
-## Funktionen
+## Features
 
-- **Passiver Proxy:** Rohdaten-Advertisements, gebündelt alle 100 ms.
-- **Aktiver Proxy:** Verbinden, Services, Lesen/Schreiben/Notify, Slot-Verwaltung (Schalten von Schlössern, Lampen usw.).
-  Scan-Pause und automatische Wiederholung beim Verbindungsaufbau.
-- **Pairing** ("Just Works", wie ein ESP32-Proxy) über einen BlueZ-Agenten, der nur das Gerät annimmt, das gerade
-  von uns gekoppelt wird. PIN-/Passkey-Eingabe ist nicht möglich.
-- **Scan-Modus** aktiv/passiv, in HA umschaltbar. Passiv braucht BlueZ ab 5.56 mit Advertisement-Monitor (teils
-  `bluetoothd --experimental`); fehlt das, fällt der Proxy automatisch auf aktiv zurück und versucht es nicht erneut.
-- **Pause nach Verbindungsfehlern:** ab dem zweiten Fehler in Folge pro Gerät 5 s, 10 s, … (höchstens 60 s), damit ein
-  nicht antwortendes Gerät nicht ununterbrochen angefragt wird (`connect_backoff_step`, 0 = aus).
-- **Hinweise im Log** bei blockiertem Bluetooth (rfkill) und bei Unterspannung am Pi.
-- **Überwachung:** erkennt Neustart von `bluetoothd`, ausgeschalteten oder entfernten Adapter und ausbleibende
-  Advertisements; repariert, was möglich ist, und beendet sich sonst mit Exit-Code 1, damit systemd neu startet.
-- **Diagnose:** Statistik-Zeile im Log und drei Sensoren in HA (CPU-Temperatur, Advertisements, aktive Verbindungen).
+- **Passive proxy:** raw advertisements, batched every 100 ms.
+- **Active proxy:** connect, services, read/write/notify, connection slot management (switching locks, lights, etc.).
+  Pauses scanning while connecting and retries automatically.
+- **Pairing** ("Just Works", like an ESP32 proxy) through a BlueZ agent that only accepts the device we are currently
+  pairing. PIN/passkey entry is not possible.
+- **Scan mode** active/passive, switchable from Home Assistant. Passive needs BlueZ 5.56 or newer with the
+  Advertisement Monitor API (sometimes `bluetoothd --experimental`); if it is missing, the proxy falls back to active
+  scanning and does not try again.
+- **Back-off after connection failures:** from the second consecutive failure per device, 5 s, 10 s, … (at most 60 s)
+  so an unresponsive device is not hammered continuously (`connect_backoff_step`, 0 = off).
+- **Hints in the log** for blocked Bluetooth (rfkill) and for under-voltage on the Pi.
+- **Supervision:** detects a `bluetoothd` restart, a powered-off or removed adapter, and missing advertisements;
+  repairs what it can and otherwise exits with code 1 so systemd restarts it.
+- **Diagnostics:** a statistics line in the log and three sensors in Home Assistant (CPU temperature, advertisements,
+  active connections).
 
-## Hinweise
+## Notes
 
-- **Ohne Gewähr.** Das Projekt kann Türschlösser und andere Geräte steuern. Setze es nicht als einzige Zugangsmöglichkeit
-  ein und teste es vor sicherheitsrelevanter Nutzung selbst. Die Lizenz (MIT) schließt jede Haftung aus.
-- **Keine Verbindung zu anderen Projekten.** Es besteht keine Verbindung zu ESPHome, Home Assistant, Nabu Casa oder
-  SwitchBot; die Namen sind Marken ihrer Inhaber und stehen hier nur zur Beschreibung der Kompatibilität. Gegenüber
-  Home Assistant meldet sich der Proxy als ESPHome-kompatibles Gerät (mDNS-Typ `_esphomelib._tcp`, Versionsangabe
-  `2025.10.0`), damit dessen ESPHome-Integration ihn akzeptiert.
+- **No warranty.** This project can control door locks and other devices. Do not use it as the only way to get in, and
+  test it yourself before any security-relevant use. The license (MIT) excludes all liability.
+- **No affiliation.** There is no connection to ESPHome, Home Assistant, Nabu Casa or SwitchBot; the names are
+  trademarks of their owners and appear here only to describe compatibility. Towards Home Assistant the proxy
+  identifies itself as an ESPHome-compatible device (mDNS type `_esphomelib._tcp`, reported version `2025.10.0`) so
+  that its ESPHome integration accepts it.
 
-## Stand der Prüfung
+## Verification status
 
-Auf einem Raspberry Pi 4 (Raspberry Pi OS auf Debian 12, BlueZ 5.66) mit einem SwitchBot Lock in Home Assistant geprüft:
-Weiterleiten von Advertisements, Verbinden, Schreiben und Notifications, dauerhaft stabile Verbindung zu HA, die
-Diagnose-Sensoren in HA sowie Installation und Update über das Debian-Paket. Der Rückfall auf den aktiven Scan, wenn
-BlueZ keinen Advertisement-Monitor anbietet, ist ebenfalls im Betrieb beobachtet.
+Verified on a Raspberry Pi 4 (Raspberry Pi OS based on Debian 12, BlueZ 5.66) with a SwitchBot Lock in Home
+Assistant: forwarding of advertisements, connecting, writing and notifications, a permanently stable connection to
+Home Assistant, the diagnostic sensors in Home Assistant, and installing and updating through the Debian package. The
+fallback to active scanning when BlueZ offers no Advertisement Monitor has also been observed in operation.
 
-Nur gegen ein simuliertes BlueZ getestet (nicht auf echter Hardware): Pairing, der passive Scan-Modus, die Pause nach
-Verbindungsfehlern, die Wiederherstellung nach einem `bluetoothd`-Neustart und die rfkill-/Unterspannungs-Hinweise
-(Erkennung über sysfs).
+Tested only against a simulated BlueZ (not on real hardware): pairing, the passive scan mode, the back-off after
+connection failures, recovery after a `bluetoothd` restart, and the rfkill / under-voltage hints (detected via sysfs).
 
-## Installation (Debian-Paket)
+## Installation (Debian package)
 
 ```
-packaging/build-deb.sh                      # erzeugt dist/pi-ble-proxy_<Version>_all.deb
-scp dist/*.deb BENUTZER@PI-HOSTNAME:
-sudo apt install ./pi-ble-proxy_*_all.deb   # zieht python3-cryptography, python3-dbus-fast, avahi-daemon nach
+packaging/build-deb.sh                      # creates dist/pi-ble-proxy_<version>_all.deb
+scp dist/*.deb USER@PI-HOSTNAME:
+sudo apt install ./pi-ble-proxy_*_all.deb   # pulls in python3-cryptography, python3-dbus-fast, avahi-daemon
 ```
 
-Das Paket legt den Benutzer `bleproxy` an, erzeugt `/etc/pi-ble-proxy/config.toml` mit neuem Schlüssel (nur wenn die
-Datei fehlt), schreibt den mDNS-Eintrag für Avahi und startet den Dienst. Den Schlüssel trägst du in HA beim Hinzufügen
-des ESPHome-Geräts ein. Nach Änderungen an Name oder Port: `pi-ble-proxy avahi | sudo tee /etc/avahi/services/pi-ble-proxy.service`.
+The package creates the user `bleproxy`, creates `/etc/pi-ble-proxy/config.toml` with a fresh key (only if the file is
+missing), writes the mDNS entry for Avahi and starts the service. You enter the key in Home Assistant when adding the
+ESPHome device. After changing name or port: `pi-ble-proxy avahi | sudo tee /etc/avahi/services/pi-ble-proxy.service`.
 
-**Umstieg von einer manuellen Installation:** vorher `sudo systemctl disable --now pi-ble-proxy`, dann
-`sudo rm /etc/systemd/system/pi-ble-proxy.service` und `sudo rm -r /opt/pi-ble-proxy`. Die vorhandene Konfiguration
-bleibt erhalten.
+**Switching from a manual installation:** first `sudo systemctl disable --now pi-ble-proxy`, then
+`sudo rm /etc/systemd/system/pi-ble-proxy.service` and `sudo rm -r /opt/pi-ble-proxy`. Your existing configuration is
+kept.
 
-## Konfiguration
+## Configuration
 
-Siehe `config.example.toml`. Wichtig im Dauerbetrieb:
+See `config.example.toml`. Important for permanent operation:
 
-- `[logging] level = "INFO"` – DEBUG schreibt eine Zeile pro Notification.
-- `/etc/pi-ble-proxy/config.toml` enthält den Schlüssel: Rechte 640, Besitzer `root:bleproxy`.
-- WLAN am Pi abschalten und per Ethernet anbinden (WLAN und Bluetooth teilen sich Chip und Antenne).
-- `[watchdog]` steuert die Überwachung, `pause_scan_on_connect` die Scan-Pause beim Verbinden.
+- `[logging] level = "INFO"` – DEBUG writes one line per notification.
+- `/etc/pi-ble-proxy/config.toml` contains the key: mode 640, owner `root:bleproxy`.
+- Turn Wi-Fi off on the Pi and use Ethernet (Wi-Fi and Bluetooth share the chip and the antenna).
+- `[watchdog]` controls the supervision, `pause_scan_on_connect` the scan pause while connecting.
 
-## Abhängigkeiten
+## Dependencies
 
-Laufzeit: `python3-cryptography` (X25519, ChaCha20-Poly1305) und `python3-dbus-fast` (BlueZ per D-Bus).
-Alles andere ist Standardbibliothek. Ohne `python3-dbus-fast` läuft der Proxy nur passiv.
-Nur für Tests: `pytest`, `aioesphomeapi`, `noiseprotocol`, `dbus-fast`.
+Runtime: `python3-cryptography` (X25519, ChaCha20-Poly1305) and `python3-dbus-fast` (BlueZ over D-Bus).
+Everything else is the standard library. Without `python3-dbus-fast` the proxy runs in passive-only mode.
+Tests only: `pytest`, `aioesphomeapi`, `noiseprotocol`, `dbus-fast`.
 
-## Werkzeug zum Testen
+## Tool for testing
 
-`tools/proxy_client.py` spricht die API direkt an (Scan, Pairing, Services), ohne Home Assistant.
-Es läuft auf jedem Rechner im Netz mit `pip install aioesphomeapi`; Details in der Kopfzeile der Datei.
+`tools/proxy_client.py` talks to the API directly (scan, pairing, services), without Home Assistant. It runs on any
+machine on the network with `pip install aioesphomeapi`; see the header of the file for details.
 
-## Lizenz
+## License
 
-MIT, siehe [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
 
 ## Tests
 
@@ -94,5 +95,5 @@ python -m venv --system-site-packages .venv
 .venv/bin/python -m pytest
 ```
 
-Die Tests laufen gegen den echten `aioesphomeapi`-Client (denselben wie HA) und ein simuliertes BlueZ auf einem
-privaten D-Bus (`dbus-daemon` muss installiert sein).
+The tests run against the real `aioesphomeapi` client (the same one Home Assistant uses) and a simulated BlueZ on a
+private D-Bus (`dbus-daemon` must be installed).
